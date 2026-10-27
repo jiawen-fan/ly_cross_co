@@ -1,4 +1,4 @@
-"""Combine LiLa Ly-alpha power, Cartesian CO power, and FFTPower cross power.
+"""Measure matched Cartesian CO/Ly-alpha auto and cross power and S/N.
 
 Use with noiseless, spatially aligned CO and delta_F maps of the SAME volume.
 Units: box cMpc/h; CO microK; k h/cMpc; noise powers in the corresponding
@@ -10,20 +10,22 @@ mask, reconstruction transfer function, anisotropic beam, or non-Gaussian
 covariance. Do not pass already-noisy auto spectra and add their noise again.
 
 Notebook example (Tco and lya_mock already loaded):
-    from co_lya_sn import combine_power_and_sn
+    from lya_co.co.co_ly_sn import combine_power_and_sn
     result = combine_power_and_sn(Tco, lya_mock, noise_co=0, noise_lya=0)
     np.savez("co_lya_sn_results.npz", **result)
 The zeros give sample-variance-only S/N. Replace with your noise powers for
 an observational forecast. CO white noise: N_CO = sigma_voxel**2 * V_voxel,
 where sigma_voxel is in microK and V_voxel in (cMpc/h)^3 on that noise grid.
 """
-from copy import copy
 import numpy as np
 
 
 def rebin_mean(field, shape):
     """Average integer-sized blocks, one output x slab at a time."""
-    shape = np.asarray(shape, dtype=int)
+    shape = np.asarray(shape)
+    if shape.shape != (3,) or np.any(shape <= 0) or np.any(shape != shape.astype(int)) or len(field.shape) != 3:
+        raise ValueError("Input and target must be 3D with positive integer dimensions")
+    shape = shape.astype(int)
     old_shape = np.asarray(field.shape)
     if np.any(old_shape % shape):
         raise ValueError("Ly-alpha dimensions must be integer multiples of CO dimensions")
@@ -47,11 +49,17 @@ def signal_to_noise(k, Pco, Plya, Pcross, modes, noise_co, noise_lya,
     volume_ratio = survey volume / map volume; this is only a mode-count
     rescaling, not an explicit survey-window calculation.
     """
+    k, Pco, Plya, Pcross, modes = [np.asarray(a, dtype=float)
+                                   for a in (k, Pco, Plya, Pcross, modes)]
+    if k.ndim != 1 or any(a.shape != k.shape for a in (Pco, Plya, Pcross, modes)):
+        raise ValueError('Spectra and mode counts must be matching 1D arrays')
+    if np.any(~np.isfinite(modes)) or np.any(modes < 0):
+        raise ValueError('Mode counts must be finite and nonnegative')
     Nco = noise_co(k) if callable(noise_co) else noise_co
     Nlya = noise_lya(k) if callable(noise_lya) else noise_lya
     Nco = np.broadcast_to(np.asarray(Nco, dtype=float), k.shape)
     Nlya = np.broadcast_to(np.asarray(Nlya, dtype=float), k.shape)
-    if np.any(Nco < 0) or np.any(Nlya < 0) or volume_ratio <= 0:
+    if np.any(~np.isfinite(Nco[modes > 0])) or np.any(~np.isfinite(Nlya[modes > 0])) or np.any(Nco < 0) or np.any(Nlya < 0) or not np.isfinite(volume_ratio) or volume_ratio <= 0:
         raise ValueError("Noise powers must be nonnegative and volume_ratio positive")
     Nm = modes * volume_ratio
     valid = ((k > 0) & (Nm > 0) & (Pco > 0) & (Plya > 0)
@@ -79,64 +87,51 @@ def signal_to_noise(k, Pco, Plya, Pcross, modes, noise_co, noise_lya,
                 sn_F_total=np.sqrt(np.sum(sn_lya**2)), valid_bins=valid)
 
 
+def combine_maps_and_sn(Tco, delta_f, boxsize, k_edges, noise_co, noise_lya,
+                        volume_ratio=1.0):
+    """Aligned complete periodic maps -> matched spectra and Gaussian S/N.
+
+    CO is microK and delta_f dimensionless. Noise powers must refer to the
+    same filtered fields. Zero noise explicitly requests sample variance only.
+    Sparse sightlines and masked maps require a different estimator.
+    """
+    from lya_co.estimator.power import matched_power
+    p = matched_power(Tco, delta_f, boxsize, k_edges)
+    result = signal_to_noise(p['k'], p['P_CO'], p['P_F'], p['P_CO_F'],
+                             p['modes'], noise_co, noise_lya, volume_ratio)
+    result.update(k_edges=p['k_edges'], boxsize_cmpch=p['boxsize_cmpch'],
+                  volume_ratio=volume_ratio)
+    return result
+
+
 def combine_power_and_sn(Tco, lya_mock, noise_co, noise_lya,
                          dk=0.05, kmin=0.03, kmax=1.0,
-                         final_transpose=(1, 0, 2), volume_ratio=1.0):
-    """Return matched spectra and S/N, starting with the notebook's lya_mock.
+                         final_transpose=(0, 1, 2), volume_ratio=1.0):
+    """LiLa map adapter. All spectra use the same rebinned field and FFT.
 
-    final_transpose is applied AFTER lya_mock.transpose. Its default reproduces
-    the extra swapaxes(1, 0) in cross_test.ipynb. If your LiLa map is already
-    aligned with CO, pass (0, 1, 2). Geometry/alignment must be physically verified.
-
-    noise_co/noise_lya are REQUIRED: use 0 explicitly for a sample-variance-only
-    calculation, or supply effective noise powers on these map fields.
+    final_transpose is applied AFTER LiLa's own transpose; identity is the
+    default. Verify axis order and origin from metadata, not correlation size.
+    Block averaging retains its voxel window; it is not deconvolved.
     """
-    from lila.stats import Stats
-    from nbodykit.lab import ArrayMesh, FFTPower
-    from lim_mocker_cartesian import power_spectrum
-
-    if kmin <= 0:
-        raise ValueError("Use kmin > 0 to exclude the mean (zero Fourier mode)")
-    box = np.asarray(lya_mock.boxsize, dtype=float)
-    Tco = np.asarray(Tco)
-    dF = lya_mock.get_map_noiseless()
-    dF = np.transpose(dF, final_transpose)
+    if not np.all(np.isfinite([dk, kmin, kmax])) or dk <= 0 or not 0 <= kmin < kmax:
+        raise ValueError('Require dk > 0 and 0 <= kmin < kmax')
+    if sorted(final_transpose) != [0, 1, 2]:
+        raise ValueError('final_transpose must be an axis permutation')
+    box = np.broadcast_to(np.asarray(lya_mock.boxsize, dtype=float), (3,))
+    box = box[list(final_transpose)]
+    dF = np.transpose(lya_mock.get_map_noiseless(), final_transpose)
     dF = rebin_mean(dF, Tco.shape)
     if lya_mock.flux_mode:
-        dF = dF / lya_mock.get_mean_flux(z=lya_mock.z) - 1.0
-    dF = np.ascontiguousarray(dF - dF.mean(), dtype=np.float32)
-
-    # Use the SAME rebinned Ly-alpha field in LiLa's auto and the cross power.
-    # A shallow copy avoids modifying the original lya_mock and its cached map.
-    matched_lya = copy(lya_mock)
-    matched_lya.noiseless_map = dF
-    matched_lya.Nmesh = list(dF.shape)
-    matched_lya.flux_mode = False
-    k_nyquist = np.min(np.pi * np.asarray(Tco.shape) / box)
-    if kmax > 0.5 * k_nyquist:
-        raise ValueError("Use kmax <= half the smallest grid Nyquist frequency")
-    settings = dict(mode="1d", BoxSize=box, kmin=kmin, kmax=kmax, dk=dk)
-
-    lya_stats = Stats(mock_lya=matched_lya, kmin=kmin, kmax=kmax, dk=dk)
-    auto_lya = lya_stats.get_lya_pk(mode="1d").power
-    edges = np.asarray(auto_lya.edges["k"])
-    auto_co = power_spectrum(Tco, box, k_edges=edges)
-    cross = FFTPower(first=ArrayMesh(Tco - Tco.mean(), BoxSize=box),
-                     second=ArrayMesh(dF, BoxSize=box), **settings).power
-
-    np.testing.assert_allclose(cross.edges["k"], edges)
-    np.testing.assert_array_equal(auto_co["nmodes"], cross["modes"])
-    np.testing.assert_array_equal(auto_lya["modes"], cross["modes"])
-    # Counts must agree; equal array lengths alone do not establish matching bins.
-    result = signal_to_noise(
-        np.asarray(cross["k"]), auto_co["Pk"], auto_lya["power"].real,
-        cross["power"].real, cross["modes"], noise_co, noise_lya, volume_ratio)
-    result["k_edges"] = edges
-    result["boxsize_cmpch"] = box
-    result["volume_ratio"] = volume_ratio
-    for name in ("CO", "F", "cross"):
-        print(f"{name} total S/N = {result['sn_' + name + '_total']:.3f}")
-    return result
+        mean_flux = lya_mock.get_mean_flux(z=lya_mock.z)
+        if not np.isfinite(mean_flux) or mean_flux <= 0:
+            raise ValueError('Mean flux must be positive and finite')
+        dF = dF / mean_flux - 1.0
+    if kmax > 0.5 * np.min(np.pi * np.asarray(Tco.shape) / box):
+        raise ValueError('Use kmax <= half the smallest grid Nyquist frequency')
+    edges = np.arange(kmin, kmax, dk)
+    edges = np.append(edges, kmax)
+    return combine_maps_and_sn(Tco, dF, box, edges, noise_co, noise_lya,
+                               volume_ratio)
 
 
 def lya_sampling_noise(lya_mock, pixel_noise_1d=0.0):
@@ -160,3 +155,4 @@ def lya_sampling_noise(lya_mock, pixel_noise_1d=0.0):
         return lya_mock.dperp**2 * (p + pixel_noise_1d).mean(axis=1)
 
     return noise
+
