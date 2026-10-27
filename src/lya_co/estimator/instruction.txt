@@ -1,0 +1,1 @@
+follow hipster, use map created from lya and Co to do cross estimator, explicitly make changeable geomtry and window function

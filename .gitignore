@@ -1,0 +1,26 @@
+# Large scientific data
+data/
+outputs/
+results/raw/
+*.h5
+*.hdf5
+*.fits
+*.npy
+*.npz
+*.zarr/
+
+# Slurm logs
+logs/
+slurm-*.out
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.pytest_cache/
+.venv/
+
+# Secrets
+.env
+*.key
