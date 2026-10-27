@@ -1,10 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=lya-co-compare
-#SBATCH --partition=standard-s
+#SBATCH --account=pbreysse_lya_forest_co_0001
+#SBATCH --partition=htc
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=16G
+#SBATCH --mem=8G
 #SBATCH --time=00:30:00
 #SBATCH --output=compare-%j.log
 set -euo pipefail
