@@ -1,0 +1,31 @@
+{
+  "co": null,
+  "lya": null,
+  "lya_key": "map",
+  "redshift": 2.6,
+  "boxsize": [
+    250.0,
+    250.0,
+    250.0
+  ],
+  "nmesh": 10,
+  "bins": 8,
+  "kmax": null,
+  "r_max": null,
+  "window": "tophat",
+  "skip_pairs": false,
+  "seed": 42,
+  "output": "results/comparison-26144162-synthetic",
+  "git_commit": "84fd470230f917fbf5bd17c979cd672b032bd8ce",
+  "seconds": 0.1807901430875063,
+  "checks": {
+    "pair_vs_radial_max_scaled_error": 5.307899584807682e-16,
+    "pair_vs_radial_pass": true,
+    "untapered_fft_max_scaled_error": 3.651065864175624e-16,
+    "untapered_fft_pass": true
+  },
+  "input_quantity_lya": "delta_F",
+  "input_units_co": "microK",
+  "input_geometry": "aligned complete periodic xyz grids",
+  "numpy_version": "1.26.4"
+}

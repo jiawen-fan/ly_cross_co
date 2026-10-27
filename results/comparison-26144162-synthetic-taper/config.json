@@ -1,0 +1,29 @@
+{
+  "co": null,
+  "lya": null,
+  "lya_key": "map",
+  "redshift": 2.6,
+  "boxsize": [
+    250.0,
+    250.0,
+    250.0
+  ],
+  "nmesh": 10,
+  "bins": 8,
+  "kmax": null,
+  "r_max": 80.0,
+  "window": "cosine",
+  "skip_pairs": false,
+  "seed": 42,
+  "output": "results/comparison-26144162-synthetic-taper",
+  "git_commit": "84fd470230f917fbf5bd17c979cd672b032bd8ce",
+  "seconds": 0.06998500786721706,
+  "checks": {
+    "pair_vs_radial_max_scaled_error": 4.862723928602157e-16,
+    "pair_vs_radial_pass": true
+  },
+  "input_quantity_lya": "delta_F",
+  "input_units_co": "microK",
+  "input_geometry": "aligned complete periodic xyz grids",
+  "numpy_version": "1.26.4"
+}

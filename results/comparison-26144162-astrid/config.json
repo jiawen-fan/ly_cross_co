@@ -1,0 +1,31 @@
+{
+  "co": "/users/jiawenfan/work/lya_CO/limlam_cartesian_v2_simplified/co_li_cartesian.npz",
+  "lya": "/projects/pbreysse/lya_forest_CO/lya_storage/Lyman-alpha-ASTRID_z2.5_unzipped/Lyman-alpha-ASTRID_z2.5/map_ASTRID_true_0.25_z2.5.hdf5",
+  "lya_key": "map",
+  "redshift": 2.6,
+  "boxsize": [
+    250.0,
+    250.0,
+    250.0
+  ],
+  "nmesh": 10,
+  "bins": 8,
+  "kmax": null,
+  "r_max": null,
+  "window": "tophat",
+  "skip_pairs": false,
+  "seed": 42,
+  "output": "results/comparison-26144162-astrid",
+  "git_commit": "84fd470230f917fbf5bd17c979cd672b032bd8ce",
+  "seconds": 0.2203534133732319,
+  "checks": {
+    "pair_vs_radial_max_scaled_error": 1.706581424827808e-09,
+    "pair_vs_radial_pass": false,
+    "untapered_fft_max_scaled_error": 2.0406279953579e-16,
+    "untapered_fft_pass": true
+  },
+  "input_quantity_lya": "delta_F",
+  "input_units_co": "microK",
+  "input_geometry": "aligned complete periodic xyz grids",
+  "numpy_version": "1.26.4"
+}
