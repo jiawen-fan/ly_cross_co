@@ -24,6 +24,7 @@ srun python -u scripts/reconstruction_compare.py \
     --co "$CO" --lya-map "$ASTRID/map_ASTRID_true_0.25_z2.5.hdf5" \
     --spectra "$ASTRID/spectra_ASTRID_noiseless_z2.5_1000_voxels.hdf5" \
     --dachshund "$DACHSHUND" --mean-flux "$MEAN_FLUX" \
+    --lya-power-source "${LYA_POWER_SOURCE:-full-map}" --lya-map-field "${LYA_MAP_FIELD:-delta}" \
     --nmesh 250 --sightlines 1000 --stride 5 --kmax 1 --bins 40 \
     --co-samples 20000 --rmax 80 --dr .1 "${noise_args[@]}" \
     --output "results/reconstruction-${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}-${SLURM_ARRAY_TASK_ID:-reference}"

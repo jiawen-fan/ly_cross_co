@@ -143,3 +143,48 @@ ASTRID reader conventions, covariance/S/N, and the external executable file
 contract using a clearly identified stub. The stub is not a reconstruction
 solver. Actual ASTRID data and your compiled Dachshund executable are only on
 HPC, so their convergence and full-volume results must be verified there.
+
+## Full-map and sparse-sightline auto/cross power options
+
+`--lya-power-source full-map` (default), `sightlines`, or `both` selects
+which Ly-alpha measurements appear in the additional auto/cross summary.
+The original three-method cross comparison remains available in all modes.
+For Slurm, set `export LYA_POWER_SOURCE=both` before submission.
+`--lya-map-field delta` is the default for the supplied ASTRID map; use
+`--lya-map-field flux` (or `LYA_MAP_FIELD=flux`) only for actual transmitted F.
+The latter converts F/mean_flux-1 with the explicitly supplied mean flux.
+
+The full-map default follows the structure of LiLa's
+[`Stats.get_lya_pk` and `get_lim_lya_pk`](https://github.com/qezlou/lila/blob/main/src/lila/stats.py):
+signal power from the noiseless map, with a separate sightline sampling-noise
+model. LiLa's `get_1D_lya_pk`/`get_lya_noise_pk` supply a P1D-based noise term;
+our saved `sampling_noise_monopole` uses the equal-weight approximation
+N_F(k_parallel)=dperp^2 P1D(k_parallel), averaged over |mu|. It is not LiLa's
+full effective-density/SNR weighting model, a reconstruction covariance, or
+a noise term to subtract from the distinct-sightline pair auto estimator.
+
+For sparse auto-power, the new estimator counts **different sightlines only**,
+excluding every same-sightline pair. This avoids the same-sightline alias term
+and independent pixel-noise self contribution. It assumes uniform random
+transverse sightlines and uniform LOS pixels, uses the cosine radial window,
+and samples up to `--auto-anchors 20000` anchor pixels by default. It retains
+the sample-mean integral constraint; it is not survey-window deconvolved.
+It can be negative in individual bins and is not interchangeable with the
+full-map auto in a Gaussian S/N formula. Verify convergence with anchor count
+and radial spacing. Realization covariance for sparse auto-power itself has
+not been added to `ensemble_sn.py`; that command remains for cross multipoles.
+
+Additional outputs:
+
+- `auto_cross_multipoles.png`: rows for CO auto, Ly-alpha auto and CO x Ly-alpha;
+  columns ell=0,2,4. Reconstruction is shown alongside the selected source(s).
+- `auto_cross_spectra.csv` and `.npz`: labeled auto/cross multipoles; the NPZ
+  also contains the separate approximate sampling-noise monopole.
+- `lya_1d.npz`: full-map and sparse-sightline 1D power on their respective LOS
+  grids, without silently interpolating one onto the other.
+- `auto_anchor_ids.csv`: reproducible sparse auto quadrature selection.
+
+Both raw F and delta_F input paths, distinct-sightline normalization, and
+inverse-density sampling-noise scaling are tested. The full pipeline with
+`--lya-power-source both` was smoke-tested with synthetic inputs and a stub
+executable; it is not a validation of the real Dachshund solver.

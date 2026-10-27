@@ -20,7 +20,7 @@ def main():
     ref = np.load(a.reference/'multipoles.npz')
     configs = [json.loads((path/'config.json').read_text()) for path in paths]
     ref_config = json.loads((a.reference/'config.json').read_text())
-    keys = ['nmesh', 'sightlines', 'stride', 'seed', 'mean_flux', 'sigma', 'tau_scale',
+    keys = ['lya_map_field', 'nmesh', 'sightlines', 'stride', 'seed', 'mean_flux', 'sigma', 'tau_scale',
             'pixel_origin', 'kmax', 'bins', 'rmax', 'dr', 'co_samples', 'lperp',
             'lpara', 'corr_variance', 'pcg_tol', 'pcg_max_iter', 'box', 'executable_sha256']
     for config in configs:

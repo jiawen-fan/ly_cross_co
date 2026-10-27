@@ -6,22 +6,26 @@ from lya_co.co.co_ly_sn import rebin_mean
 
 
 def flux_to_delta(flux, mean_flux):
-    if not np.isfinite(mean_flux) or mean_flux <= 0:
+    if mean_flux is None or not np.isfinite(mean_flux) or mean_flux <= 0:
         raise ValueError('mean_flux must be positive')
     return np.asarray(flux) / mean_flux - 1
 
 
 def delta_to_flux(delta, mean_flux):
-    if not np.isfinite(mean_flux) or mean_flux <= 0:
+    if mean_flux is None or not np.isfinite(mean_flux) or mean_flux <= 0:
         raise ValueError('mean_flux must be positive')
     return (1 + np.asarray(delta)) * mean_flux
 
 
-def load_maps(co_path, map_path, nmesh):
+def load_maps(co_path, map_path, nmesh, map_field="delta", mean_flux=None):
     with np.load(co_path) as f:
         co = np.asarray(rebin_mean(f['map_cube'], (nmesh,)*3))
     with h5py.File(map_path, 'r') as f:
         truth = np.asarray(rebin_mean(f['map'], (nmesh,)*3))
+    if map_field == "flux":
+        truth = flux_to_delta(truth, mean_flux)
+    elif map_field != "delta":
+        raise ValueError("map_field must be delta or flux")
     return co, truth
 
 

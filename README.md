@@ -145,3 +145,10 @@ saved separately. See [docs/reconstruction.md](docs/reconstruction.md) for
 M3 commands, required mean-flux normalization, computational controls,
 outputs and distinctions between noise-only and total mock covariance.
 HCD masking and survey-response corrections are not implemented.
+
+The auto/cross summary defaults to the full Ly-alpha map, following LiLa's
+signal-map approach. Add `--lya-power-source both` (Slurm:
+`export LYA_POWER_SOURCE=both`) to also measure sparse distinct-sightline
+auto power and sparse CO cross power. Raw flux input is explicit via
+`--lya-map-field flux`; the supplied ASTRID delta_F map uses the default
+`delta`. Sampling-noise estimates are saved separately from measured signal.

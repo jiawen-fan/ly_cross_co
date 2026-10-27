@@ -9,6 +9,7 @@ from lya_co.lya.astrid import load_maps, read_sightlines
 from lya_co.reconstruction.dachshund import reconstruct
 from lya_co.spectra.multipoles import fft_multipoles, power_1d, gaussian_truth_sn
 from lya_co.estimator.sightline_pairs import sightline_pair_multipoles
+from lya_co.spectra.auto_cross import sparse_auto_multipoles, sampling_noise_monopole, save_auto_cross
 
 
 def plot_comparison(k, spectra, output):
@@ -33,6 +34,9 @@ def main():
         p.add_argument('--'+name, required=True)
     p.add_argument('--mean-flux', type=float, required=True,
                    help='Use exactly the mean flux used to create the true map')
+    p.add_argument('--lya-power-source', choices=['full-map', 'sightlines', 'both'], default='full-map')
+    p.add_argument('--lya-map-field', choices=['delta', 'flux'], default='delta')
+    p.add_argument('--auto-anchors', type=int, default=20000)
     p.add_argument('--nmesh', type=int, default=250)
     p.add_argument('--sightlines', type=int, default=1000)
     p.add_argument('--stride', type=int, default=5)
@@ -70,7 +74,7 @@ def main():
                       a.corr_variance, a.pcg_tol, a.pcg_max_iter)
     np.save(out/'reconstruction.npy', rec)
     print('Reading aligned full maps and calculating Fourier multipoles', flush=True)
-    co, truth = load_maps(a.co, a.lya_map, a.nmesh)
+    co, truth = load_maps(a.co, a.lya_map, a.nmesh, a.lya_map_field, a.mean_flux)
     edges = np.linspace(0, a.kmax, a.bins+1)
     ground = fft_multipoles(co, truth, box, edges)
     reconstructed = fft_multipoles(co, rec, box, edges)
@@ -96,6 +100,25 @@ def main():
     np.savez(out/'auto_spectra.npz', k=ground['k'], co=auto_co['power'],
              truth=auto_truth['power'], reconstruction=auto_rec['power'],
              k1d=k1d, sightline_p1d=p1d)
+    k_full_1d, full_p1d = power_1d(truth, box)
+    np.savez(out/'lya_1d.npz', full_k=k_full_1d, full_p1d=full_p1d,
+             sightline_k=k1d, sightline_p1d=p1d)
+    lya_autos, cross_outputs = {}, {}
+    if a.lya_power_source in ('full-map', 'both'):
+        lya_autos['full_map'] = auto_truth['power']
+        cross_outputs['full_map'] = ground['power']
+    extras = {'sampling_noise_monopole': sampling_noise_monopole(sight['values'], box, ground['k'])}
+    if a.lya_power_source in ('sightlines', 'both'):
+        print('Counting distinct-sightline Ly-alpha auto pairs', flush=True)
+        auto_sparse = sparse_auto_multipoles(sight, ground['k'], a.rmax, a.dr,
+                                             a.auto_anchors, a.seed)
+        lya_autos['distinct_sightline_pairs'] = auto_sparse['power']
+        cross_outputs['sightline_pairs'] = pair['power']
+        extras['auto_anchor_ids'] = auto_sparse['anchor_ids']
+        np.savetxt(out/'auto_anchor_ids.csv', auto_sparse['anchor_ids'], fmt='%d', header='pixel_index')
+    lya_autos['reconstruction'] = auto_rec['power']
+    cross_outputs['reconstruction'] = reconstructed['power']
+    save_auto_cross(out, ground['k'], auto_co['power'], lya_autos, cross_outputs, extras)
     plot_comparison(ground['k'], powers, out)
     truth_sn = gaussian_truth_sn(co, truth, box, edges)
     np.savez(out/'truth_gaussian_sn.npz', k=ground['k'], **truth_sn)
