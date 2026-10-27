@@ -24,16 +24,24 @@ srun python scripts/compare_estimators.py \
     --nmesh 10 --window cosine --r-max 80 \
     --output "results/comparison-${SLURM_JOB_ID}-synthetic-taper"
 
-# Pass the existing CO npz and Ly-alpha delta_F HDF5 as two sbatch arguments.
+# Use supplied maps by default; two arguments override these paths.
+CO_FILE="/users/jiawenfan/work/lya_CO/limlam_cartesian_v2_simplified/co_li_cartesian.npz"
+LYA_FILE="/projects/pbreysse/lya_forest_CO/lya_storage/Lyman-alpha-ASTRID_z2.5_unzipped/Lyman-alpha-ASTRID_z2.5/map_ASTRID_true_0.25_z2.5.hdf5"
 if [[ $# -eq 2 ]]; then
-    srun python scripts/compare_estimators.py \
-        --co "$1" --lya "$2" --nmesh 10 --boxsize 250 250 250 --redshift 2.6 \
-        --output "results/comparison-${SLURM_JOB_ID}-astrid"
-    srun python scripts/compare_estimators.py \
-        --co "$1" --lya "$2" --nmesh 10 --boxsize 250 250 250 --redshift 2.6 \
-        --window cosine --r-max 80 \
-        --output "results/comparison-${SLURM_JOB_ID}-astrid-taper"
+    CO_FILE="$1"
+    LYA_FILE="$2"
 elif [[ $# -ne 0 ]]; then
-    echo 'Supply either zero arguments or both CO.npz and LyAlpha.hdf5' >&2
+    echo 'Supply zero arguments for default maps, or both CO.npz and LyAlpha.hdf5' >&2
     exit 2
 fi
+echo "CO input: $CO_FILE"
+echo "Ly-alpha input: $LYA_FILE"
+echo 'Requested redshift label: 2.6. Default Ly-alpha filename says z2.5; verify snapshot metadata before physical interpretation.'
+# --redshift records the requested label; it does not transform either map.
+srun python scripts/compare_estimators.py \
+    --co "$CO_FILE" --lya "$LYA_FILE" --nmesh 10 --boxsize 250 250 250 --redshift 2.6 \
+    --output "results/comparison-${SLURM_JOB_ID}-astrid"
+srun python scripts/compare_estimators.py \
+    --co "$CO_FILE" --lya "$LYA_FILE" --nmesh 10 --boxsize 250 250 250 --redshift 2.6 \
+    --window cosine --r-max 80 \
+    --output "results/comparison-${SLURM_JOB_ID}-astrid-taper"
