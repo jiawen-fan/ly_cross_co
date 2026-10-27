@@ -1,38 +1,56 @@
-# Sparse mock sightline experiment
+# Full-map versus sparse-sightline cross power
 
-Submit `sbatch scripts/sparse_pairs.sbatch` from the repository root on an
-allowed M3 login host, with your scientific Python environment active.
-Requests 64 GB, 4 CPUs, 4 hours on htc. Cluster resource availability is not
-verified here. More memory supports the higher-resolution grid; NumPy FFTs
-are not guaranteed to use all four CPUs.
+Run `sbatch scripts/sparse_pairs.sbatch` from the repository root on an M3
+login node, with your scientific Python environment active. The request remains
+4 CPUs, 64 GB and 4 hours, nmesh=250, 1000 sightlines, seed=42,
+kmax=1 h/cMpc, 40 common bins, cosine radial cutoff=80 cMpc/h.
+No AI software or API calls are used on M3.
 
-Defaults: periodic L=250 cMpc/h, 250^3 grid, 1000 random full z-columns without
-replacement, seed 42, kmax=1 h/cMpc, cosine separation taper ending at 80 cMpc/h.
-Mean transverse spacing is about 7.9 cMpc/h. Each sightline has finite transverse
-voxel width: block-averaged native map cells, not a pencil beam. Only selected
-Ly-alpha column blocks are read. No flux renormalization, reconstruction or
-pixel noise is added. Physical alignment of input axes is assumed.
+The input CO NPZ uses `map_cube` (microK); Ly-alpha HDF5 uses `map`
+(already delta_F). Both must cover the same aligned periodic box, in the same
+axis order. The code block-averages each to nmesh; it never upsamples or removes
+the voxel window. Full-map reading is slabwise during downsampling.
+The supplied Ly-alpha path says z2.5: matching redshifts/coordinates must be
+verified from the datasets, not changed by setting a plotting label.
 
-The weighted sparse pair monopole uses dV for CO and dV/p for selected Ly-alpha
-pixels, with p=Nsightlines/(Nx Ny). Means are removed from CO and from the
-selected Ly-alpha sample. The correlation-grid implementation exactly compresses
-this discrete pair sum; the masked field is a computational accumulator, not a
-claim that unobserved flux is zero. Tests compare against explicit sparse pairs.
+## Curves
 
-Random selection weights do not supply a general survey correction. Sample-mean
-subtraction can introduce an integral-constraint effect; sightline correlations,
-noise, aliasing and covariance are not calibrated. Continuous-angle pair power
-and discrete Fourier shells need not match. The fixed radial taper changes both.
-This version supports grid-aligned mock sightlines only, not arbitrary fake_spectra
-coordinates. It is a higher-k numerical experiment, not a validated forecast.
+- `full_fft`: original complete-map discrete Fourier shell estimator.
+- `sparse_pair_monopole`: CO full grid crossed only with selected Ly-alpha
+  columns, computed by exact periodic grid compression of the weighted pair sum.
+- `full_pair_monopole`: same radial window/Bessel estimator with all columns;
+  compare this to sparse pairs to isolate sampling effects.
+- `full_windowed_fft`, `sparse_windowed_fft`: Fourier shell averages with the
+  same real-space cosine window; these distinguish window and shell-averaging
+  effects from the radial Bessel result evaluated at the mean k in each shell.
 
-The supplied Ly-alpha filename indicates z=2.5; CO redshift is unverified.
-Outputs explicitly record the redshift as unverified, not z=2.6. Verify metadata
-before physical interpretation. No redshift transformation is performed.
+All use identical k edges, geometry, and CO input. FFT normalization is V/Ncell^2;
+pair weights are dV_CO*dV_F/p divided by V, with p=Nselected/(nx*ny).
+The selected field is centered on its sample mean and weighted by 1/p.
+Zeros in its computational accumulator represent missing samples, not measured
+zero flux. Selected columns are finite-area block averages along axis 2, not
+arbitrary-position pencil-beam spectra from fake_spectra. No reconstruction,
+survey-window correction, or sparse covariance model is included.
 
-Outputs: results/sparse-JOBID/{comparison.png,spectra.csv,spectra.npz,config.json}.
-NPZ includes selected transverse indices; config includes seed and probability.
-Default kmax is below half Nyquist (1.57 h/cMpc), but this alone does not validate
-small-scale aliasing or painting-window effects. Re-run with different seeds and
-sightline counts to assess sampling variation. Full-map baseline remains available
-through scripts/compare_estimators.py with --nmesh 250 --skip-pairs --kmax 1.
+## Outputs
+
+Each run creates a new `results/sparse-JOBID/` directory:
+
+- `comparison.png`: all five cross spectra, linear and signed logarithmic panels.
+- `full_map_diagnostics.png`: complete-map CO and Ly-alpha auto power and r(k).
+- `spectra.csv`: shared k, full +/-k mode counts, cross spectra, autos, r.
+- `spectra.npz`: the same numerical results plus bin edges and selection metadata.
+- `sightlines.csv`: selected transverse grid indices, retained with lightweight results.
+- `config.json`: input paths, scales, means, seed, selection probability, units,
+  code revision, and redshift caveat.
+
+Empty Fourier shells are NaN. Mode counts and r refer to the complete periodic
+map: they do not supply sparse-pair uncertainties or an observational S/N.
+Do not use the sparse accumulator auto power as a physical Ly-alpha auto spectrum.
+The sample-mean subtraction can cause a sampling-dependent integral constraint.
+
+Reusable functions are in `lya_co.estimator.full_sparse`; the command-line
+loader and plotting functions are in `scripts/sparse_pairs.py`.
+The small-grid tests compare compressed sparse pairs with explicit weighted
+pairs, check all-sightline agreement, and verify that changing unselected
+Ly-alpha pixels changes only the complete-map baseline.
