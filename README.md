@@ -69,3 +69,54 @@ Cross power spectrum and S/N
 Calculating signal to noise ratio for CO and lyman alpha
 Calculating the cross power spectrum with different input maps
 Comparing results
+
+
+## Working periodic-map cross spectrum
+
+Install from the repository root: `python -m pip install -e .`.
+Run tests with `PYTHONPATH=src python -m unittest discover -s tests -v`.
+Open `scripts/cross_test.ipynb` for loading, block averaging, cross-power,
+S/N, and plotting from existing CO and Ly-alpha maps. It needs h5py and
+matplotlib in addition to NumPy.
+
+```python
+from lya_co.co.co_ly_sn import combine_maps_and_sn
+result = combine_maps_and_sn(Tco, delta_f, boxsize, k_edges,
+                             noise_co=0, noise_lya=0)
+```
+
+Both maps must share physical volume, origin, axes, voxel locations,
+redshift and real/redshift-space convention. `delta_f` is already F/<F>-1;
+do not normalize it a second time. No axis permutation is guessed.
+`combine_power_and_sn` remains a LiLa map adapter, but all three spectra
+now use one NumPy estimator, independent of nbodykit and the CO map maker.
+
+The estimator uses P_ab = V/Ncell^2 Re[FFT(a) FFT(b)*], subtracts global
+means, excludes k=0 and counts both +k and -k modes. Bins are [left,right).
+It retains empty bins as NaN; S/N removes invalid bins and returns a
+`valid_bins` mask relative to the original `k_edges`. For CO in microK and
+Ly-alpha delta_F, CO auto, Ly-alpha auto and cross power have units
+microK^2 (cMpc/h)^3, (cMpc/h)^3 and microK (cMpc/h)^3 respectively.
+
+The Gaussian cross variance is
+`((P_CO+N_CO)*(P_F+N_F)+P_CO_F**2)/N_modes`.
+Zero noise requests sample variance only. Halo shot noise in the map is
+retained; do not add it a second time. Block averaging and painting windows
+are retained, with no deconvolution. The notebook limits k to half the
+smallest grid Nyquist frequency. Spherical diagonal errors are an
+approximation for anisotropic fields; masks and reconstructed fields need
+window/response and covariance treatment before observational interpretation.
+
+### Known incomplete components in the initial commit
+
+- `src/lya_co/co/lim_mocker_cartesian.py` is an exact copy of `co_ly_sn.py`,
+  not the original map maker. `run_astrid.py`, `run_peak.py`, and the example
+  map-making notebook cannot run until the original Li-model implementation
+  is restored. Do not use these to regenerate maps yet.
+- The estimator instruction requests a HIPSTER-style sparse-sightline pair
+  estimator with configurable geometry/windows. That implementation is not
+  present. The periodic FFT baseline above does not replace it; do not
+  zero-fill missing sightlines and pass them as a complete map.
+- Full ASTRID runs require the external HPC datasets and verification of
+  map metadata. Synthetic tests here validate Fourier normalization, odd/even
+  mode counts, negative cross-power, rebinning and the Gaussian formula.
