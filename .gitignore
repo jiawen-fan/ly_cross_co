@@ -8,6 +8,7 @@ results/raw/
 *.npy
 *.npz
 *.zarr/
+results/**/dachshund/*.bin
 
 # Slurm logs
 logs/
